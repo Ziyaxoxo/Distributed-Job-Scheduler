@@ -13,7 +13,7 @@ A production-inspired distributed job scheduling platform for reliably executing
 - Execution logs, retry history, and queue statistics
 - React dashboard with job creation, queue config, and polling-based live updates
 
-##Output Sample
+## Output Sample
 
 
 https://github.com/user-attachments/assets/96050c3e-c584-4966-a8b0-56809f72f82d
