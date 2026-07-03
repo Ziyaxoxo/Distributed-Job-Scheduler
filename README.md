@@ -16,7 +16,10 @@ A production-inspired distributed job scheduling platform for reliably executing
 ## Output Sample
 
 
-https://github.com/user-attachments/assets/96050c3e-c584-4966-a8b0-56809f72f82d
+
+
+https://github.com/user-attachments/assets/5df11868-c88a-4efb-bc15-d3129d46f96f
+
 
 
 
