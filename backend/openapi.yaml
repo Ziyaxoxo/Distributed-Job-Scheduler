@@ -1,0 +1,479 @@
+openapi: 3.0.3
+info:
+  title: Distributed Job Scheduler API
+  version: 1.0.0
+  description: REST API for managing projects, queues, jobs, and workers.
+
+servers:
+  - url: http://localhost:3000/api
+    description: Local development
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+        hasNext:
+          type: boolean
+        hasPrev:
+          type: boolean
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+
+    Queue:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        priority:
+          type: integer
+        maxConcurrency:
+          type: integer
+        isPaused:
+          type: boolean
+
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        queueId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [QUEUED, SCHEDULED, CLAIMED, RUNNING, COMPLETED, FAILED]
+        jobType:
+          type: string
+          enum: [IMMEDIATE, DELAYED, SCHEDULED, RECURRING, BATCH]
+        payload:
+          type: object
+        nextRunAt:
+          type: string
+          format: date-time
+        maxRetries:
+          type: integer
+
+    CreateJobRequest:
+      type: object
+      required: [job_type, payload]
+      properties:
+        job_type:
+          type: string
+          enum: [IMMEDIATE, DELAYED, SCHEDULED, RECURRING, BATCH]
+        payload:
+          type: object
+        max_retries:
+          type: integer
+        delay_seconds:
+          type: integer
+        scheduled_at:
+          type: string
+          format: date-time
+        interval_seconds:
+          type: integer
+        batch_jobs:
+          type: array
+          items:
+            type: object
+            properties:
+              payload:
+                type: object
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Service healthy
+
+  /auth/register:
+    post:
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        '201':
+          description: User created
+        '409':
+          description: Email already exists
+
+  /auth/login:
+    post:
+      summary: Login and receive JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+        '401':
+          description: Invalid credentials
+
+  /auth/me:
+    get:
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user profile
+
+  /projects:
+    get:
+      summary: List projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paginated project list
+    post:
+      summary: Create project
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '201':
+          description: Project created
+
+  /projects/{projectId}/queues:
+    get:
+      summary: List queues in project
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Queue list
+    post:
+      summary: Create queue
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                priority:
+                  type: integer
+                max_concurrency:
+                  type: integer
+                retry_policy_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Queue created
+
+  /queues/{queueId}:
+    get:
+      summary: Get queue details
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: queueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Queue details
+    patch:
+      summary: Update queue (pause/resume, config)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: queueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                priority:
+                  type: integer
+                max_concurrency:
+                  type: integer
+                is_paused:
+                  type: boolean
+      responses:
+        '200':
+          description: Queue updated
+
+  /queues/{queueId}/stats:
+    get:
+      summary: Get queue statistics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: queueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Queue stats
+
+  /queues/{queueId}/jobs:
+    post:
+      summary: Create job(s) in queue
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: queueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJobRequest'
+      responses:
+        '201':
+          description: Job created
+
+  /jobs:
+    get:
+      summary: List jobs with filters
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: queue_id
+          in: query
+          schema:
+            type: string
+        - name: job_type
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated job list
+
+  /jobs/{jobId}:
+    get:
+      summary: Get job detail with logs and executions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Job detail
+
+  /jobs/{jobId}/retry:
+    post:
+      summary: Retry failed or DLQ job
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Job requeued
+
+  /dlq:
+    get:
+      summary: List dead letter queue entries
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: DLQ entries
+
+  /workers:
+    get:
+      summary: List workers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Worker list
+
+  /workers/register:
+    post:
+      summary: Register a new worker
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        '201':
+          description: Worker registered
+
+  /workers/heartbeat:
+    post:
+      summary: Send worker heartbeat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [worker_id]
+              properties:
+                worker_id:
+                  type: string
+                  format: uuid
+                metadata:
+                  type: object
+      responses:
+        '200':
+          description: Heartbeat recorded
+
+  /stats:
+    get:
+      summary: System-wide statistics
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: System stats

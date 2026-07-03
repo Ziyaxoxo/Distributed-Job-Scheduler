@@ -1,0 +1,254 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum JobStatus {
+  QUEUED
+  SCHEDULED
+  CLAIMED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum JobType {
+  IMMEDIATE
+  DELAYED
+  SCHEDULED
+  RECURRING
+  BATCH
+}
+
+enum RetryStrategy {
+  FIXED
+  LINEAR
+  EXPONENTIAL
+}
+
+enum WorkerStatus {
+  ACTIVE
+  DEAD
+}
+
+enum ExecutionStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum OrganizationRole {
+  OWNER
+  MEMBER
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  projects            Project[]
+  organizationMembers OrganizationMember[]
+
+  @@map("users")
+}
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  members  OrganizationMember[]
+  projects Project[]
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  role           OrganizationRole @default(MEMBER)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@map("organization_members")
+}
+
+model Project {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  description    String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  queues       Queue[]
+
+  @@index([userId])
+  @@map("projects")
+}
+
+model RetryPolicy {
+  id                String        @id @default(uuid()) @db.Uuid
+  name              String        @db.VarChar(100)
+  strategy          RetryStrategy @default(EXPONENTIAL)
+  baseDelaySeconds  Int           @default(5) @map("base_delay_seconds")
+  maxDelaySeconds   Int           @default(3600) @map("max_delay_seconds")
+  maxRetries        Int           @default(3) @map("max_retries")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  queues Queue[]
+
+  @@map("retry_policies")
+}
+
+model Queue {
+  id              String   @id @default(uuid()) @db.Uuid
+  projectId       String   @map("project_id") @db.Uuid
+  retryPolicyId   String?  @map("retry_policy_id") @db.Uuid
+  name            String   @db.VarChar(255)
+  priority        Int      @default(1)
+  maxConcurrency  Int      @default(10) @map("max_concurrency")
+  isPaused        Boolean  @default(false) @map("is_paused")
+  isDeleted       Boolean  @default(false) @map("is_deleted")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  retryPolicy RetryPolicy? @relation(fields: [retryPolicyId], references: [id], onDelete: SetNull)
+  jobs        Job[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("queues")
+}
+
+model Job {
+  id              String    @id @default(uuid()) @db.Uuid
+  queueId         String    @map("queue_id") @db.Uuid
+  workerId        String?   @map("worker_id") @db.Uuid
+  batchId         String?   @map("batch_id") @db.Uuid
+  payload         Json      @db.JsonB
+  status          JobStatus @default(QUEUED)
+  jobType         JobType   @default(IMMEDIATE) @map("job_type")
+  nextRunAt       DateTime  @default(now()) @map("next_run_at") @db.Timestamptz
+  intervalSeconds Int?      @map("interval_seconds")
+  executionCount  Int       @default(0) @map("execution_count")
+  maxRetries      Int       @default(3) @map("max_retries")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  queue         Queue          @relation(fields: [queueId], references: [id], onDelete: Restrict)
+  worker        Worker?        @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  executions    JobExecution[]
+  logs          JobLog[]
+  scheduledJob  ScheduledJob?
+  deadLetter    DeadLetterQueue?
+
+  @@index([status, nextRunAt, queueId], map: "idx_jobs_polling")
+  @@index([queueId, status], map: "idx_jobs_queue_status")
+  @@index([workerId, status], map: "idx_jobs_worker_status")
+  @@index([batchId])
+  @@map("jobs")
+}
+
+model JobExecution {
+  id           String          @id @default(uuid()) @db.Uuid
+  jobId        String          @map("job_id") @db.Uuid
+  workerId     String?         @map("worker_id") @db.Uuid
+  attempt      Int             @default(1)
+  status       ExecutionStatus @default(RUNNING)
+  startedAt    DateTime        @default(now()) @map("started_at") @db.Timestamptz
+  completedAt  DateTime?       @map("completed_at") @db.Timestamptz
+  result       Json?           @db.JsonB
+  errorMessage String?         @map("error_message") @db.Text
+  durationMs   Int?            @map("duration_ms")
+
+  job    Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  worker Worker? @relation(fields: [workerId], references: [id], onDelete: SetNull)
+
+  @@index([jobId])
+  @@index([workerId])
+  @@map("job_executions")
+}
+
+model JobLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  jobId     String   @map("job_id") @db.Uuid
+  level     String   @default("INFO") @db.VarChar(20)
+  message   String   @db.Text
+  metadata  Json?    @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, createdAt])
+  @@map("job_logs")
+}
+
+model ScheduledJob {
+  id              String   @id @default(uuid()) @db.Uuid
+  jobId           String   @unique @map("job_id") @db.Uuid
+  scheduledFor    DateTime @map("scheduled_for") @db.Timestamptz
+  intervalSeconds Int?     @map("interval_seconds")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([scheduledFor, isActive])
+  @@map("scheduled_jobs")
+}
+
+model Worker {
+  id            String       @id @default(uuid()) @db.Uuid
+  name          String       @db.VarChar(255)
+  host          String       @db.VarChar(255)
+  status        WorkerStatus @default(ACTIVE)
+  lastHeartbeat DateTime     @default(now()) @map("last_heartbeat") @db.Timestamptz
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  jobs        Job[]
+  executions  JobExecution[]
+  heartbeats  WorkerHeartbeat[]
+
+  @@index([lastHeartbeat], map: "idx_workers_heartbeat")
+  @@index([status])
+  @@map("workers")
+}
+
+model WorkerHeartbeat {
+  id        String   @id @default(uuid()) @db.Uuid
+  workerId  String   @map("worker_id") @db.Uuid
+  timestamp DateTime @default(now()) @db.Timestamptz
+  metadata  Json?    @db.JsonB
+
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId, timestamp])
+  @@map("worker_heartbeats")
+}
+
+model DeadLetterQueue {
+  id              String   @id @default(uuid()) @db.Uuid
+  jobId           String   @unique @map("job_id") @db.Uuid
+  originalPayload Json     @map("original_payload") @db.JsonB
+  failureReason   String   @map("failure_reason") @db.Text
+  failedAt        DateTime @default(now()) @map("failed_at") @db.Timestamptz
+  retryCount      Int      @default(0) @map("retry_count")
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([failedAt])
+  @@map("dead_letter_queue")
+}
