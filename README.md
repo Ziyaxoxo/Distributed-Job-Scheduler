@@ -15,8 +15,6 @@ A production-inspired distributed job scheduling platform for reliably executing
 - React dashboard with job creation, queue configuration, and polling-based live updates
 
 
-See [architecture.md](architecture.md), [er-diagram.md](er-diagram.md), and [design-decisions.md](design-decisions.md) for detailed diagrams and design rationale.
-
 ---
 
 ## Quick Start (Docker)
