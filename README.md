@@ -1,27 +1,18 @@
+```markdown
 # Distributed Job Scheduler
 
 A production-inspired distributed job scheduling platform for reliably executing asynchronous background jobs across multiple workers.
 
 ## Features
 
-- JWT authentication and project/queue management
-- Job types: immediate, delayed, scheduled, recurring (interval), and batch
+- JWT authentication and project / queue management
+- Job types: **immediate**, **delayed**, **scheduled**, **recurring** (interval-based), and **batch**
 - Atomic job claiming via PostgreSQL `FOR UPDATE SKIP LOCKED`
-- Worker fleet with heartbeats, graceful shutdown, and dead worker recovery
+- Worker fleet with heartbeats, graceful shutdown, and dead-worker recovery
 - Retry strategies: fixed, linear, and exponential backoff
 - Dead Letter Queue (DLQ) for permanent failures
 - Execution logs, retry history, and queue statistics
-- React dashboard with job creation, queue config, and polling-based live updates
-
-## Output Sample
-
-
-
-
-https://github.com/user-attachments/assets/5df11868-c88a-4efb-bc15-d3129d46f96f
-
-
-
+- React dashboard with job creation, queue configuration, and polling-based live updates
 
 ## Architecture
 
@@ -42,28 +33,30 @@ https://github.com/user-attachments/assets/5df11868-c88a-4efb-bc15-d3129d46f96f
               └──────────┘        └──────────┘        └──────────┘
 ```
 
-See [architecture.md](architecture.md) and [er-diagram.md](er-diagram.md) for detailed diagrams.
+See [architecture.md](architecture.md), [er-diagram.md](er-diagram.md), and [design-decisions.md](design-decisions.md) for detailed diagrams and design rationale.
 
 ---
 
 ## Quick Start (Docker)
 
 ```bash
-cd job-scheduler
+git clone https://github.com/Ziyaxoxo/Distributed-Job-Scheduler.git
+cd Distributed-Job-Scheduler
 docker compose up --build
 ```
 
-| Service   | URL                    |
-|-----------|------------------------|
-| API       | http://localhost:3000  |
-| Dashboard | http://localhost:5173  |
-| Postgres  | localhost:5432         |
+| Service    | URL                          |
+|------------|------------------------------|
+| API        | http://localhost:3000        |
+| Dashboard  | http://localhost:5173        |
+| Postgres   | localhost:5432               |
 
-Demo credentials (after seed): `demo@scheduler.local` / `password123`
+**Demo credentials** (seeded automatically):  
+`demo@scheduler.local` / `password123`
 
 ---
 
-## Local Development (Recommended)
+## Local Development
 
 ### Prerequisites
 
@@ -73,82 +66,82 @@ Demo credentials (after seed): `demo@scheduler.local` / `password123`
 ### One-time setup
 
 ```bash
-cd job-scheduler/backend
+# Backend
+cd backend
 cp .env.example .env
 npm install
 npx prisma migrate deploy
 npm run db:seed
 
+# Frontend
 cd ../frontend
 npm install
 ```
 
-Default database URL in `.env.example`:
+Default `DATABASE_URL` in `backend/.env.example`:
 
 ```
-postgresql://scheduler:scheduler@localhost:5432/job_scheduler
+postgresql://scheduler:scheduler@localhost:5432/job_scheduler?schema=public
 ```
 
-If using Homebrew PostgreSQL with a different user, update `DATABASE_URL` in `backend/.env`.
+Update the connection string if your local Postgres user/password differs.
 
-### Run the stack (4 terminals)
-
-Open **four separate terminal windows/tabs** and run one command in each:
+### Run the stack (3–4 terminals)
 
 **Terminal 1 — PostgreSQL** (skip if already running as a service)
 
 ```bash
-# macOS Homebrew example:
+# macOS Homebrew example
 brew services start postgresql@16
 ```
 
 **Terminal 2 — API server** (port 3000)
 
 ```bash
-cd job-scheduler/backend
+cd backend
 npm run dev
 ```
 
-**Terminal 3 — Worker process** (polls DB and executes jobs)
+**Terminal 3 — Worker process**
 
 ```bash
-cd job-scheduler/backend
+cd backend
 npm run dev:worker
 ```
 
 **Terminal 4 — Dashboard** (port 5173)
 
 ```bash
-cd job-scheduler/frontend
+cd frontend
 npm run dev
 ```
 
 ### Access the app
 
-| What        | URL                          |
-|-------------|------------------------------|
-| Dashboard   | http://localhost:5173        |
-| API health  | http://localhost:3000/api/health |
-| Login       | `demo@scheduler.local` / `password123` |
+| What         | URL / Credentials                              |
+|--------------|------------------------------------------------|
+| Dashboard    | http://localhost:5173                          |
+| API health   | http://localhost:3000/api/health               |
+| Login        | `demo@scheduler.local` / `password123`         |
 
 ### Verify it works
 
-1. Open http://localhost:5173 and sign in
-2. Go to **Jobs** → click **+ Create Job**
-3. Select the `default-queue` queue, choose `IMMEDIATE`, payload template `echo`
-4. Click **Enqueue Job** — within a few seconds the job should move to `COMPLETED`
-5. Check **Workers** to see the active worker and heartbeat
+1. Open http://localhost:5173 and sign in.
+2. Go to **Jobs** → **+ Create Job**.
+3. Select the default queue, choose `IMMEDIATE`, payload template `echo`.
+4. Click **Enqueue Job** — the job should move to `COMPLETED` within a few seconds.
+5. Check **Workers** to see the active worker and its heartbeat.
 
 ---
 
 ## Tests
 
 ```bash
-cd job-scheduler/backend
+cd backend
 npm test
 ```
 
-Requires PostgreSQL running with migrations applied (15 tests).
+Requires PostgreSQL running with migrations applied.
 
 ---
 
@@ -183,40 +176,53 @@ Full API reference: [backend/openapi.yaml](backend/openapi.yaml)
 
 ---
 
-## Job Payload Handlers (Demo)
+## Demo Job Payload Handlers
 
-| `payload.type` | Behavior                |
-|----------------|-------------------------|
-| `echo`         | Returns payload as-is   |
-| `fail`         | Simulates failure       |
-| `slow`         | Sleeps `delay_ms`       |
-| `compute`      | Simple math operations  |
+| `payload.type` | Behavior                          |
+|----------------|-----------------------------------|
+| `echo`         | Returns the payload as-is         |
+| `fail`         | Simulates a failure               |
+| `slow`         | Sleeps for `delay_ms` milliseconds|
+| `compute`      | Performs simple math operations   |
 
 ---
 
 ## Project Structure
 
 ```
-job-scheduler/
-├── backend/          # Express API + Worker
-├── frontend/         # React dashboard
-├── docs/             # SRS generator + Word document
+Distributed-Job-Scheduler/
+├── backend/                 # Express API + Worker (TypeScript, Prisma)
+│   ├── prisma/              # Schema, migrations, seed
+│   ├── src/
+│   │   ├── controllers/
+│   │   ├── middleware/
+│   │   ├── routes/
+│   │   ├── services/
+│   │   ├── workers/
+│   │   └── ...
+│   ├── openapi.yaml
+│   └── Dockerfile
+├── frontend/                # React + Vite + Tailwind dashboard
+│   ├── src/
+│   └── Dockerfile
+├── docs/                    # SRS generator + Word document
 ├── architecture.md
 ├── er-diagram.md
-└── design-decisions.md
+├── design-decisions.md
+└── docker-compose.yml
 ```
 
 ---
 
 ## Documentation
 
-| Document | Path |
-|----------|------|
-| Architecture | [architecture.md](architecture.md) |
-| ER Diagram | [er-diagram.md](er-diagram.md) |
-| Design Decisions | [design-decisions.md](design-decisions.md) |
-| SRS (Word) | [docs/SRS-Distributed-Job-Scheduler.docx](docs/SRS-Distributed-Job-Scheduler.docx) |
-| OpenAPI Spec | [backend/openapi.yaml](backend/openapi.yaml) |
+| Document          | Path                                                                 |
+|-------------------|----------------------------------------------------------------------|
+| Architecture      | [architecture.md](architecture.md)                                   |
+| ER Diagram        | [er-diagram.md](er-diagram.md)                                       |
+| Design Decisions  | [design-decisions.md](design-decisions.md)                           |
+| SRS (Word)        | [docs/SRS-Distributed-Job-Scheduler.docx](docs/SRS-Distributed-Job-Scheduler.docx) |
+| OpenAPI Spec      | [backend/openapi.yaml](backend/openapi.yaml)                         |
 
 ### Regenerate SRS document
 
@@ -227,6 +233,23 @@ python3 docs/generate-srs.py
 
 ---
 
+## Tech Stack
+
+| Layer              | Technology                          |
+|--------------------|-------------------------------------|
+| Backend API        | Node.js, Express, TypeScript        |
+| Worker             | Same codebase (`src/workers`)       |
+| ORM / Migrations   | Prisma                              |
+| Database           | PostgreSQL 16                       |
+| Auth               | JWT + bcrypt                        |
+| Frontend           | React 19, Vite, Tailwind CSS, Recharts |
+| Validation         | Zod                                 |
+| Testing            | Vitest + Supertest                  |
+| Containerization   | Docker + Docker Compose             |
+
+---
+
 ## License
 
 MIT
+```
