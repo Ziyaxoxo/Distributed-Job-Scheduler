@@ -14,24 +14,6 @@ A production-inspired distributed job scheduling platform for reliably executing
 - Execution logs, retry history, and queue statistics
 - React dashboard with job creation, queue configuration, and polling-based live updates
 
-## Architecture
-
-```
-┌─────────────┐     REST API      ┌──────────────┐
-│   React     │◄─────────────────►│  Express API │
-│  Dashboard  │                   └──────┬───────┘
-└─────────────┘                          │
-┌─────────────┐                          ▼
-│ API Clients │                   ┌──────────────┐
-└─────────────┘                   │  PostgreSQL  │
-                                  └──────┬───────┘
-                                         │
-                    ┌────────────────────┼────────────────────┐
-                    ▼                    ▼                    ▼
-              ┌──────────┐        ┌──────────┐        ┌──────────┐
-              │ Worker 1 │        │ Worker 2 │        │ Worker N │
-              └──────────┘        └──────────┘        └──────────┘
-```
 
 See [architecture.md](architecture.md), [er-diagram.md](er-diagram.md), and [design-decisions.md](design-decisions.md) for detailed diagrams and design rationale.
 
