@@ -232,4 +232,3 @@ python3 docs/generate-srs.py
 ## License
 
 MIT
-```
