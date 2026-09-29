@@ -167,6 +167,22 @@ Full API reference: [backend/openapi.yaml](backend/openapi.yaml)
 
 ---
 
+
+## Output Demo
+
+
+<img width="959" height="499" alt="image" src="https://github.com/user-attachments/assets/2a189b34-7b76-4dc1-9d33-044cf8dfaa64" />
+<br><br>
+
+<img width="959" height="493" alt="image" src="https://github.com/user-attachments/assets/b8a4cf4f-a577-4ec9-b4d8-7de1bfa778c7" />
+<br><br>
+
+<img width="959" height="488" alt="image" src="https://github.com/user-attachments/assets/15f68790-7eda-4aea-ae4b-29f386e586fc" />
+<br><br>
+
+
+
+
 ## Project Structure
 
 ```
